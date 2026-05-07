@@ -1,0 +1,12 @@
+{
+  "name": "stokvel-manager",
+  "version": "1.0.0",
+  "description": "Stokvel tracking app for the South African market",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build"
+  }
+}
