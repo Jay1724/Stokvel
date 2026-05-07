@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import db from '../database/db';
+import { sendReminderNotifications } from '../services/twilio';
 
 const router = Router({ mergeParams: true });
 
@@ -68,15 +69,14 @@ router.post('/generate-payment', (req: Request, res: Response) => {
     'INSERT INTO reminders (stokvel_id, member_id, type, title, message, due_date) VALUES (?, ?, ?, ?, ?, ?)'
   );
   const dueDate = new Date(year, month - 1, 28).toISOString().split('T')[0];
+  const monthLabel = now.toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
 
   const txn = db.transaction(() => {
     unpaidMembers.forEach((m: any) => {
       insert.run(
-        stokvelId,
-        m.id,
-        'payment',
-        `Payment Reminder - ${now.toLocaleString('en-ZA', { month: 'long', year: 'numeric' })}`,
-        `Hi ${m.name}, your contribution of R${stokvel.contribution_amount} for ${now.toLocaleString('en-ZA', { month: 'long' })} ${year} is outstanding. Please pay before month end.`,
+        stokvelId, m.id, 'payment',
+        `Payment Reminder – ${monthLabel}`,
+        `Hi ${m.name}, your contribution of R${stokvel.contribution_amount.toLocaleString('en-ZA')} for ${monthLabel} is outstanding. Please pay before month end.`,
         dueDate
       );
     });
@@ -84,6 +84,13 @@ router.post('/generate-payment', (req: Request, res: Response) => {
   txn();
 
   return res.json({ generated: unpaidMembers.length, members: unpaidMembers.map((m: any) => m.name) });
+});
+
+// Send pending reminders via WhatsApp/SMS
+router.post('/send-notifications', async (req: Request, res: Response) => {
+  const { stokvelId } = req.params;
+  const result = await sendReminderNotifications(parseInt(stokvelId));
+  return res.json(result);
 });
 
 export default router;

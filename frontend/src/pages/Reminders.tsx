@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Bell, BellOff, Zap, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Bell, BellOff, Zap, CheckCircle, Send } from 'lucide-react';
 import { reminderApi, memberApi } from '../api';
 import { Stokvel } from '../App';
 import { format, isPast } from 'date-fns';
@@ -40,8 +40,10 @@ export default function Reminders({ stokvel }: { stokvel: Stokvel }) {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [generateResult, setGenerateResult] = useState('');
+  const [sendResult, setSendResult] = useState('');
 
   const load = () => reminderApi.list(stokvel.id).then(r => setReminders(r.data));
   useEffect(() => { load(); memberApi.list(stokvel.id).then(r => setMembers(r.data)); }, [stokvel.id]);
@@ -100,6 +102,20 @@ export default function Reminders({ stokvel }: { stokvel: Stokvel }) {
     }
   };
 
+  const sendNotifications = async () => {
+    setSending(true);
+    setSendResult('');
+    try {
+      const res = await reminderApi.sendNotifications(stokvel.id);
+      const { sent, failed, skipped } = res.data;
+      setSendResult(`Sent: ${sent} · Failed: ${failed} · Skipped (no phone): ${skipped}`);
+    } catch (err: any) {
+      setSendResult(err.response?.data?.error || 'Failed to send notifications.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const unread = reminders.filter(r => !r.is_read);
   const read = reminders.filter(r => r.is_read);
   const overdue = unread.filter(r => isPast(new Date(r.due_date)));
@@ -113,14 +129,22 @@ export default function Reminders({ stokvel }: { stokvel: Stokvel }) {
             {unread.length} unread{overdue.length > 0 ? ` · ${overdue.length} overdue` : ''}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={generatePaymentReminders}
             disabled={generating}
             className="btn-secondary flex items-center gap-2 text-sm"
           >
             <Zap size={15} />
-            {generating ? 'Generating...' : 'Auto-Generate Payment Reminders'}
+            {generating ? 'Generating...' : 'Auto-Generate'}
+          </button>
+          <button
+            onClick={sendNotifications}
+            disabled={sending}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            <Send size={15} />
+            {sending ? 'Sending...' : 'Send WhatsApp/SMS'}
           </button>
           <button onClick={() => { setShowForm(!showForm); setError(''); }} className="btn-primary flex items-center gap-2">
             <Plus size={16} /> New Reminder
@@ -132,6 +156,12 @@ export default function Reminders({ stokvel }: { stokvel: Stokvel }) {
         <div className="mb-4 p-3 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 flex items-center gap-2">
           <CheckCircle size={16} className="text-brand-600" />
           {generateResult}
+        </div>
+      )}
+      {sendResult && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-center gap-2">
+          <Send size={16} className="text-blue-600" />
+          {sendResult}
         </div>
       )}
 

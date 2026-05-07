@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Wallet, CalendarDays, Bell, TrendingUp, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Users, Wallet, CalendarDays, Bell, TrendingUp, CheckCircle, AlertCircle, Trophy, AlertTriangle } from 'lucide-react';
 import { stokvelApi, contributionApi } from '../api';
 import { Stokvel } from '../App';
 import { format } from 'date-fns';
@@ -7,9 +7,13 @@ import { format } from 'date-fns';
 interface Stats {
   totalMembers: number;
   totalContributions: number;
+  totalPayouts: number;
+  totalFinesOutstanding: number;
+  balance: number;
   paidThisMonth: number;
   upcomingMeetings: number;
   pendingReminders: number;
+  nextPayoutMember: { id: number; name: string } | null;
 }
 
 interface PaymentStatus {
@@ -30,48 +34,17 @@ export default function Dashboard({ stokvel }: { stokvel: Stokvel }) {
       .then(r => setPaymentStatus(r.data));
   }, [stokvel.id]);
 
-  const statCards = stats
-    ? [
-        {
-          label: 'Active Members',
-          value: stats.totalMembers,
-          icon: Users,
-          color: 'bg-blue-50 text-blue-600',
-          iconColor: 'text-blue-500',
-        },
-        {
-          label: 'Total Contributions',
-          value: `R${stats.totalContributions.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`,
-          icon: TrendingUp,
-          color: 'bg-brand-50 text-brand-600',
-          iconColor: 'text-brand-500',
-        },
-        {
-          label: 'Paid This Month',
-          value: `${stats.paidThisMonth} / ${stats.totalMembers}`,
-          icon: Wallet,
-          color: 'bg-yellow-50 text-yellow-600',
-          iconColor: 'text-yellow-500',
-        },
-        {
-          label: 'Upcoming Meetings',
-          value: stats.upcomingMeetings,
-          icon: CalendarDays,
-          color: 'bg-purple-50 text-purple-600',
-          iconColor: 'text-purple-500',
-        },
-        {
-          label: 'Pending Reminders',
-          value: stats.pendingReminders,
-          icon: Bell,
-          color: 'bg-red-50 text-red-600',
-          iconColor: 'text-red-500',
-        },
-      ]
-    : [];
-
   const paidCount = paymentStatus.filter(p => p.paid).length;
   const unpaidCount = paymentStatus.filter(p => !p.paid).length;
+
+  const statCards = stats ? [
+    { label: 'Active Members', value: stats.totalMembers, icon: Users, bg: 'bg-blue-50', iconColor: 'text-blue-500' },
+    { label: 'Fund Balance', value: `R${stats.balance.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`, icon: TrendingUp, bg: 'bg-brand-50', iconColor: 'text-brand-500' },
+    { label: 'Paid This Month', value: `${stats.paidThisMonth} / ${stats.totalMembers}`, icon: Wallet, bg: 'bg-yellow-50', iconColor: 'text-yellow-500' },
+    { label: 'Upcoming Meetings', value: stats.upcomingMeetings, icon: CalendarDays, bg: 'bg-purple-50', iconColor: 'text-purple-500' },
+    { label: 'Pending Reminders', value: stats.pendingReminders, icon: Bell, bg: 'bg-red-50', iconColor: 'text-red-500' },
+    { label: 'Fines Outstanding', value: `R${stats.totalFinesOutstanding.toLocaleString('en-ZA')}`, icon: AlertTriangle, bg: 'bg-orange-50', iconColor: 'text-orange-500' },
+  ] : [];
 
   return (
     <div className="p-8">
@@ -82,27 +55,36 @@ export default function Dashboard({ stokvel }: { stokvel: Stokvel }) {
         </p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        {statCards.map(({ label, value, icon: Icon, color, iconColor }) => (
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        {statCards.map(({ label, value, icon: Icon, bg, iconColor }) => (
           <div key={label} className="card">
-            <div className={`inline-flex p-2 rounded-lg ${color} mb-3`}>
+            <div className={`inline-flex p-2 rounded-lg ${bg} mb-3`}>
               <Icon size={20} className={iconColor} />
             </div>
-            <div className="text-2xl font-bold text-gray-800">{value}</div>
+            <div className="text-xl font-bold text-gray-800 leading-tight">{value}</div>
             <div className="text-xs text-gray-500 mt-0.5">{label}</div>
           </div>
         ))}
       </div>
 
-      {/* Payment status this month */}
+      {/* Next payout banner */}
+      {stats?.nextPayoutMember && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3">
+          <Trophy size={22} className="text-yellow-500 flex-shrink-0" />
+          <div>
+            <div className="font-semibold text-yellow-800">Next payout recipient</div>
+            <div className="text-yellow-700 text-sm">{stats.nextPayoutMember.name} is next in the rotation</div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Payment status */}
         <div className="card">
           <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Wallet size={18} className="text-brand-600" />
             Payment Status — {format(now, 'MMMM yyyy')}
           </h2>
-
           <div className="flex gap-4 mb-4">
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle size={16} className="text-green-500" />
@@ -113,7 +95,6 @@ export default function Dashboard({ stokvel }: { stokvel: Stokvel }) {
               <span className="font-medium text-red-600">{unpaidCount} outstanding</span>
             </div>
           </div>
-
           {paymentStatus.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">No members yet</p>
           ) : (
@@ -124,9 +105,7 @@ export default function Dashboard({ stokvel }: { stokvel: Stokvel }) {
                   <div className="flex items-center gap-2">
                     {paid ? (
                       <>
-                        <span className="text-xs text-gray-400">
-                          R{contribution.amount.toLocaleString('en-ZA')}
-                        </span>
+                        <span className="text-xs text-gray-400">R{contribution.amount.toLocaleString('en-ZA')}</span>
                         <span className="badge-paid">Paid</span>
                       </>
                     ) : (
@@ -139,11 +118,10 @@ export default function Dashboard({ stokvel }: { stokvel: Stokvel }) {
           )}
         </div>
 
-        {/* Progress bar */}
+        {/* Collection progress */}
         <div className="card">
           <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Clock size={18} className="text-brand-600" />
-            Monthly Collection Progress
+            <TrendingUp size={18} className="text-brand-600" /> Monthly Collection
           </h2>
           {stats && stats.totalMembers > 0 ? (
             <>
@@ -159,22 +137,33 @@ export default function Dashboard({ stokvel }: { stokvel: Stokvel }) {
                   />
                 </div>
               </div>
-
-              <div className="mt-4 p-3 bg-brand-50 rounded-lg">
-                <div className="text-sm text-brand-700 font-medium">Expected this month</div>
-                <div className="text-2xl font-bold text-brand-800 mt-1">
-                  R{(stats.totalMembers * stokvel.contribution_amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="p-3 bg-brand-50 rounded-lg">
+                  <div className="text-lg font-bold text-brand-800">
+                    R{(paidCount * stokvel.contribution_amount).toLocaleString('en-ZA')}
+                  </div>
+                  <div className="text-xs text-brand-600 mt-0.5">Collected so far</div>
                 </div>
-                <div className="text-xs text-brand-600 mt-0.5">
-                  R{(paidCount * stokvel.contribution_amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 })} collected so far
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <div className="text-lg font-bold text-red-800">
+                    R{(unpaidCount * stokvel.contribution_amount).toLocaleString('en-ZA')}
+                  </div>
+                  <div className="text-xs text-red-600 mt-0.5">Still outstanding</div>
                 </div>
-              </div>
-
-              <div className="mt-3 p-3 bg-red-50 rounded-lg">
-                <div className="text-sm text-red-700 font-medium">Still outstanding</div>
-                <div className="text-2xl font-bold text-red-800 mt-1">
-                  R{(unpaidCount * stokvel.contribution_amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <div className="text-lg font-bold text-green-800">
+                    R{stats.balance.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-xs text-green-600 mt-0.5">Fund balance (all time)</div>
                 </div>
+                {stats.totalFinesOutstanding > 0 && (
+                  <div className="p-3 bg-orange-50 rounded-lg">
+                    <div className="text-lg font-bold text-orange-800">
+                      R{stats.totalFinesOutstanding.toLocaleString('en-ZA')}
+                    </div>
+                    <div className="text-xs text-orange-600 mt-0.5">Fines outstanding</div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
